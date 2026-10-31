@@ -38,10 +38,10 @@ def process_client_request(data):
     domain, offset = parse_domain(data, 12)
     qtype, _ = struct.unpack('!HH', data[offset:offset + 4])
 
-    return request_id, domain, qtype
+    return (request_id, domain, qtype)
 
 
-def extract_ip_from_response(data):
+def extract_ip_from_response(data, qtype=1):
     _, _, _, an, ns, ar = parse_header(data)
     _, offset = parse_domain(data, 12)
     offset += 4
@@ -57,13 +57,15 @@ def extract_ip_from_response(data):
             rtype, rclass, _, rdlength = struct.unpack('!HHIH', data[offset:offset + 10])
             offset += 10
 
-            if rtype == 1 and rclass == 1 and rdlength == 4:
-                ip = socket.inet_ntoa(data[offset:offset + 4])
-
-                if is_answer_section and not final_ip:
-                    final_ip = ip
-                elif not is_answer_section and not next_server_ip:
-                    next_server_ip = ip
+            if is_answer_section:
+                if rtype == qtype and rclass == 1:
+                    if rtype == 1 and rdlength == 4:
+                        final_ip = socket.inet_ntoa(data[offset:offset + 4])
+                    elif rtype == 28 and rdlength == 16:
+                        final_ip = socket.inet_ntop(socket.AF_INET6, data[offset:offset + 16])
+            else:
+                if rtype == 1 and rclass == 1 and rdlength == 4 and not next_server_ip:
+                    next_server_ip = socket.inet_ntoa(data[offset:offset + 4])
 
             offset += rdlength
 
